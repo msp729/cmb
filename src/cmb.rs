@@ -2,17 +2,26 @@ use std::collections::{HashMap, VecDeque};
 use std::fmt::{Display, Error, Formatter};
 use std::rc::Rc;
 
-type Defs = HashMap<char, Expr>;
+pub type Defs = HashMap<char, Expr>;
+type C = Rc<Expr>; // it's short for curry
 
 #[derive(Clone, Debug)]
 pub enum Expr {
     Variable(char),
     LongVar(String),
-    S,
-    S1(Rc<Expr>),
-    S2(Rc<Expr>, Rc<Expr>),
-    K,
-    K1(Rc<Expr>),
+    S0,
+    S1(C),
+    S2(C, C),
+    K0,
+    K1(C),
+    W0,
+    W1(C),
+    C0,
+    C1(C),
+    C2(C, C),
+    B0,
+    B1(C),
+    B2(C, C),
 }
 
 impl Display for Expr {
@@ -23,11 +32,19 @@ impl Display for Expr {
             match self {
                 Expr::Variable(c) => c.to_string(),
                 Expr::LongVar(name) => name.to_owned(),
-                Expr::S => String::from("S"),
+                Expr::S0 => "S".to_string(),
                 Expr::S1(x) => format!("S{}", x.arg()),
                 Expr::S2(x, y) => format!("S{}{}", x.arg(), y.arg()),
-                Expr::K => String::from("K"),
+                Expr::K0 => "K".to_string(),
                 Expr::K1(x) => format!("K{}", x.arg()),
+                Expr::W0 => "W".to_string(),
+                Expr::W1(x) => format!("W{}", x.arg()),
+                Expr::C0 => "C".to_string(),
+                Expr::C1(x) => format!("C{}", x.arg()),
+                Expr::C2(x, y) => format!("C{}{}", x.arg(), y.arg()),
+                Expr::B0 => "B".to_string(),
+                Expr::B1(x) => format!("B{}", x.arg()),
+                Expr::B2(x, y) => format!("B{}{}", x.arg(), y.arg()),
             }
         )
     }
@@ -41,7 +58,7 @@ mod parse_tests {
     fn S_Combinator() {
         let to_parse = &"S".to_string();
         let result = "S".to_string();
-        let parsed = Expr::parse(to_parse, &Expr::SK_DEFS()).unwrap();
+        let parsed = Expr::parse(to_parse, &Expr::SK_DEFS(), false).unwrap();
         assert_eq!(parsed.to_string(), result)
     }
 
@@ -49,7 +66,7 @@ mod parse_tests {
     fn S_Combinator_eval() {
         let to_parse = &"Sxyz".to_string();
         let result = "xz(yz)".to_string();
-        let parsed = Expr::parse(to_parse, &Expr::SK_DEFS()).unwrap();
+        let parsed = Expr::parse(to_parse, &Expr::SK_DEFS(), false).unwrap();
         assert_eq!(parsed.to_string(), result)
     }
 
@@ -57,7 +74,7 @@ mod parse_tests {
     fn K_Combinator() {
         let to_parse = &"K".to_string();
         let result = "K".to_string();
-        let parsed = Expr::parse(to_parse, &Expr::SK_DEFS()).unwrap();
+        let parsed = Expr::parse(to_parse, &Expr::SK_DEFS(), false).unwrap();
         assert_eq!(parsed.to_string(), result)
     }
 
@@ -65,35 +82,56 @@ mod parse_tests {
     fn K_Combinator_eval() {
         let to_parse = &"Kxy".to_string();
         let result = "x".to_string();
-        let parsed = Expr::parse(to_parse, &Expr::SK_DEFS()).unwrap();
+        let parsed = Expr::parse(to_parse, &Expr::SK_DEFS(), false).unwrap();
         assert_eq!(parsed.to_string(), result)
     }
 }
 
 impl<'a> Expr {
-    fn call(&'a self, other: Rc<Expr>) -> Rc<Expr> {
+    fn call(&'a self, other: Rc<Expr>, trace: bool) -> Rc<Expr> {
+        if trace {
+            println!("`{}` called on `{}`", self, other)
+        }
         match self {
             Expr::LongVar(name) => Rc::new(Expr::LongVar(name.to_string() + &other.arg())),
             Expr::Variable(name) => Rc::new(Expr::LongVar(name.to_string() + &other.arg())),
-            Expr::S => Rc::new(Expr::S1(other.clone())),
+            Expr::S0 => Rc::new(Expr::S1(other.clone())),
             Expr::S1(x) => Rc::new(Expr::S2(x.clone(), other.clone())),
-            Expr::S2(x, y) => x.call(other.clone()).call(y.call(other)),
-            Expr::K => Rc::new(Expr::K1(other.clone())),
+            Expr::S2(x, y) => x
+                .call(other.clone(), trace)
+                .call(y.call(other, trace), trace),
+            Expr::K0 => Rc::new(Expr::K1(other.clone())),
             Expr::K1(x) => x.clone(),
+            Expr::W0 => Rc::new(Expr::W1(other.clone())),
+            Expr::W1(x) => x.call(other.clone(), trace).call(other.clone(), trace),
+            Expr::C0 => Rc::new(Expr::C1(other)),
+            Expr::C1(x) => Rc::new(Expr::C2(x.clone(), other)),
+            Expr::C2(x, y) => x.call(other, trace).call(y.clone(), trace),
+            Expr::B0 => Rc::new(Expr::B1(other)),
+            Expr::B1(x) => Rc::new(Expr::B2(x.clone(), other)),
+            Expr::B2(x, y) => x.call(y.call(other, trace), trace),
         }
     }
     fn arg(&self) -> String {
         match self {
             Expr::Variable(name) => name.to_string(),
             Expr::LongVar(name) => format!("({})", name),
-            Expr::S => String::from("S"),
+            Expr::S0 => String::from("S"),
             Expr::S1(x) => format!("(S{})", x.arg()),
             Expr::S2(x, y) => format!("(S{}{})", x.arg(), y.arg()),
-            Expr::K => String::from("K"),
+            Expr::K0 => String::from("K"),
             Expr::K1(x) => format!("(K{})", x.arg()),
+            Expr::W0 => String::from("W"),
+            Expr::W1(x) => format!("(W{})", x.arg()),
+            Expr::C0 => String::from("C"),
+            Expr::C1(x) => format!("(C{})", x.arg()),
+            Expr::C2(x, y) => format!("(C{}{})", x.arg(), y.arg()),
+            Expr::B0 => String::from("B"),
+            Expr::B1(x) => format!("(B{})", x.arg()),
+            Expr::B2(x, y) => format!("(B{}{})", x.arg(), y.arg()),
         }
     }
-    pub fn parse(s: &String, d: &Defs) -> Option<Expr> {
+    pub fn parse(s: &String, d: &Defs, trace: bool) -> Option<Expr> {
         let mut tokens: VecDeque<Expr> = VecDeque::new();
         let mut to_ignore = 0;
         for (i, c) in s.chars().enumerate() {
@@ -123,7 +161,7 @@ impl<'a> Expr {
                     }
                 }
                 to_ignore = running.len() + 1;
-                tokens.push_back(Expr::parse(&running, d)?);
+                tokens.push_back(Expr::parse(&running, d, trace)?);
             } else if d.contains_key(&c) {
                 tokens.push_back(d.get(&c)?.clone());
             } else {
@@ -135,12 +173,12 @@ impl<'a> Expr {
         }
         let mut out = tokens.pop_front()?;
         while !tokens.is_empty() {
-            out = Expr::clone(&out.call(Rc::new(tokens.pop_front()?)));
+            out = Expr::clone(&out.call(Rc::new(tokens.pop_front()?), trace));
         }
         Some(out)
     }
 
     pub fn SK_DEFS() -> Defs {
-        HashMap::from([('S', Expr::S), ('K', Expr::K)])
+        HashMap::from([('S', Expr::S0), ('K', Expr::K0)])
     }
 }
