@@ -2,6 +2,12 @@
 name = "cmb"
 version = "0.1.0"
 edition = "2021"
+description = "A simple interpreter of combinatorial expressions."
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/msp729/cmb"
+readme = "README.md"
+keywords = ["combinator", "interpreter", "parser", "filter"]
+categories = ["command-line-utilities"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

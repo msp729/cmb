@@ -30,21 +30,21 @@ impl Display for Expr {
             f,
             "{}",
             match self {
-                Expr::Variable(c) => c.to_string(),
-                Expr::LongVar(name) => name.to_owned(),
-                Expr::S0 => "S".to_string(),
-                Expr::S1(x) => format!("S{}", x.arg()),
-                Expr::S2(x, y) => format!("S{}{}", x.arg(), y.arg()),
-                Expr::K0 => "K".to_string(),
-                Expr::K1(x) => format!("K{}", x.arg()),
-                Expr::W0 => "W".to_string(),
-                Expr::W1(x) => format!("W{}", x.arg()),
-                Expr::C0 => "C".to_string(),
-                Expr::C1(x) => format!("C{}", x.arg()),
-                Expr::C2(x, y) => format!("C{}{}", x.arg(), y.arg()),
-                Expr::B0 => "B".to_string(),
-                Expr::B1(x) => format!("B{}", x.arg()),
-                Expr::B2(x, y) => format!("B{}{}", x.arg(), y.arg()),
+                Self::Variable(c) => c.to_string(),
+                Self::LongVar(name) => name.clone(),
+                Self::S0 => "S".to_string(),
+                Self::S1(x) => format!("S{}", x.arg()),
+                Self::S2(x, y) => format!("S{}{}", x.arg(), y.arg()),
+                Self::K0 => "K".to_string(),
+                Self::K1(x) => format!("K{}", x.arg()),
+                Self::W0 => "W".to_string(),
+                Self::W1(x) => format!("W{}", x.arg()),
+                Self::C0 => "C".to_string(),
+                Self::C1(x) => format!("C{}", x.arg()),
+                Self::C2(x, y) => format!("C{}{}", x.arg(), y.arg()),
+                Self::B0 => "B".to_string(),
+                Self::B1(x) => format!("B{}", x.arg()),
+                Self::B2(x, y) => format!("B{}{}", x.arg(), y.arg()),
             }
         )
     }
@@ -98,25 +98,21 @@ pub fn assignment(line: &str, d: &Defs, t: bool) -> Option<(char, Expr)> {
         if c != ' ' {
             name = Some(c);
             break;
-        } else {
-            continue;
         }
     }
     for (_, e) in it.by_ref() {
-        if e == '=' {
-            break;
-        } else if e != ' ' {
+        if e != ' ' && e != '=' {
             return None;
         }
     }
     Some((
         name?,
-        Expr::parse(it.fold(String::new(), |a, b| a + &b.1.to_string()), d, t)?,
+        Expr::parse(&it.fold(String::new(), |a, b| a + &b.1.to_string()), d, t)?,
     ))
 }
 
 impl<'a> Expr {
-    pub fn parse_file(body: &str, d: &mut Defs, t: bool) -> Option<Expr> {
+    pub fn parse_file(body: &str, d: &mut Defs, t: bool) -> Option<Self> {
         for line in body.lines() {
             let haystack = line.trim();
             if ["#", "//", "--"]
@@ -124,64 +120,63 @@ impl<'a> Expr {
                 .any(|s| s[..] == haystack[0..s.len()])
             {
                 continue;
-            } else if let Some((k, v)) = assignment(haystack, d, t) {
+            }
+            if let Some((k, v)) = assignment(haystack, d, t) {
                 d.insert(k, v);
-            } else if let Some(e) = Expr::parse(haystack.to_string(), d, t) {
+            } else if let Some(e) = Self::parse(haystack, d, t) {
                 return Some(e);
             }
         }
         None
     }
 
-    pub fn apply(&'a self, other: Rc<Expr>, trace: bool) -> Rc<Expr> {
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn apply(&'a self, other: Rc<Self>, trace: bool) -> Rc<Self> {
         let result = match self {
-            Expr::LongVar(name) => Rc::new(Expr::LongVar(name.to_string() + &other.arg())),
-            Expr::Variable(name) => Rc::new(Expr::LongVar(name.to_string() + &other.arg())),
-            Expr::S0 => Rc::new(Expr::S1(other.clone())),
-            Expr::S1(x) => Rc::new(Expr::S2(x.clone(), other.clone())),
-            Expr::S2(x, y) => x
+            Self::LongVar(name) => Rc::new(Self::LongVar(name.to_string() + &other.arg())),
+            Self::Variable(name) => Rc::new(Self::LongVar(name.to_string() + &other.arg())),
+            Self::S0 => Rc::new(Self::S1(other.clone())),
+            Self::S1(x) => Rc::new(Self::S2(x.clone(), other.clone())),
+            Self::S2(x, y) => x
                 .apply(other.clone(), trace)
                 .apply(y.apply(other.clone(), trace), trace),
-            Expr::K0 => Rc::new(Expr::K1(other.clone())),
-            Expr::K1(x) => x.clone(),
-            Expr::W0 => Rc::new(Expr::W1(other.clone())),
-            Expr::W1(x) => x.apply(other.clone(), trace).apply(other.clone(), trace),
-            Expr::C0 => Rc::new(Expr::C1(other.clone())),
-            Expr::C1(x) => Rc::new(Expr::C2(x.clone(), other.clone())),
-            Expr::C2(x, y) => x.apply(other.clone(), trace).apply(y.clone(), trace),
-            Expr::B0 => Rc::new(Expr::B1(other.clone())),
-            Expr::B1(x) => Rc::new(Expr::B2(x.clone(), other.clone())),
-            Expr::B2(x, y) => x.apply(y.apply(other.clone(), trace), trace),
+            Self::K0 => Rc::new(Self::K1(other.clone())),
+            Self::K1(x) => x.clone(),
+            Self::W0 => Rc::new(Self::W1(other.clone())),
+            Self::W1(x) => x.apply(other.clone(), trace).apply(other.clone(), trace),
+            Self::C0 => Rc::new(Self::C1(other.clone())),
+            Self::C1(x) => Rc::new(Self::C2(x.clone(), other.clone())),
+            Self::C2(x, y) => x.apply(other.clone(), trace).apply(y.clone(), trace),
+            Self::B0 => Rc::new(Self::B1(other.clone())),
+            Self::B1(x) => Rc::new(Self::B2(x.clone(), other.clone())),
+            Self::B2(x, y) => x.apply(y.apply(other.clone(), trace), trace),
         };
         if trace {
-            println!(
-                "`{}` applied to `{}`, resulting in `{}`",
-                self, other, result
-            );
+            println!("`{self}` applied to `{other}`, resulting in `{result}`");
         }
         result
     }
     pub fn arg(&self) -> String {
         match self {
-            Expr::Variable(name) => name.to_string(),
-            Expr::LongVar(name) => format!("({})", name),
-            Expr::S0 => String::from("S"),
-            Expr::S1(x) => format!("(S{})", x.arg()),
-            Expr::S2(x, y) => format!("(S{}{})", x.arg(), y.arg()),
-            Expr::K0 => String::from("K"),
-            Expr::K1(x) => format!("(K{})", x.arg()),
-            Expr::W0 => String::from("W"),
-            Expr::W1(x) => format!("(W{})", x.arg()),
-            Expr::C0 => String::from("C"),
-            Expr::C1(x) => format!("(C{})", x.arg()),
-            Expr::C2(x, y) => format!("(C{}{})", x.arg(), y.arg()),
-            Expr::B0 => String::from("B"),
-            Expr::B1(x) => format!("(B{})", x.arg()),
-            Expr::B2(x, y) => format!("(B{}{})", x.arg(), y.arg()),
+            Self::Variable(name) => name.to_string(),
+            Self::LongVar(name) => format!("({name})"),
+            Self::S0 => String::from("S"),
+            Self::S1(x) => format!("(S{})", x.arg()),
+            Self::S2(x, y) => format!("(S{}{})", x.arg(), y.arg()),
+            Self::K0 => String::from("K"),
+            Self::K1(x) => format!("(K{})", x.arg()),
+            Self::W0 => String::from("W"),
+            Self::W1(x) => format!("(W{})", x.arg()),
+            Self::C0 => String::from("C"),
+            Self::C1(x) => format!("(C{})", x.arg()),
+            Self::C2(x, y) => format!("(C{}{})", x.arg(), y.arg()),
+            Self::B0 => String::from("B"),
+            Self::B1(x) => format!("(B{})", x.arg()),
+            Self::B2(x, y) => format!("(B{}{})", x.arg(), y.arg()),
         }
     }
-    pub fn parse(s: String, d: &Defs, trace: bool) -> Option<Expr> {
-        let mut tokens: VecDeque<Expr> = VecDeque::new();
+    pub fn parse(s: &str, d: &Defs, trace: bool) -> Option<Self> {
+        let mut tokens: VecDeque<Self> = VecDeque::new();
         let mut to_ignore = 0;
         for (i, c) in s.chars().enumerate() {
             if to_ignore != 0 {
@@ -190,7 +185,8 @@ impl<'a> Expr {
             }
             if c == ' ' {
                 continue;
-            } else if c == '(' {
+            }
+            if c == '(' {
                 let mut running = String::new();
                 let mut depth = 1;
                 let mut it = s.chars();
@@ -210,11 +206,11 @@ impl<'a> Expr {
                     }
                 }
                 to_ignore = running.len() + 1;
-                tokens.push_back(Expr::parse(running, d, trace)?);
+                tokens.push_back(Self::parse(&running, d, trace)?);
             } else if d.contains_key(&c) {
                 tokens.push_back(d.get(&c)?.clone());
             } else {
-                tokens.push_back(Expr::Variable(c));
+                tokens.push_back(Self::Variable(c));
             }
         }
         if tokens.is_empty() {
@@ -222,7 +218,7 @@ impl<'a> Expr {
         }
         let mut out = tokens.pop_front()?;
         while !tokens.is_empty() {
-            out = Expr::clone(&out.apply(Rc::new(tokens.pop_front()?), trace));
+            out = Self::clone(&out.apply(Rc::new(tokens.pop_front()?), trace));
         }
         Some(out)
     }

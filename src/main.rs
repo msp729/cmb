@@ -28,6 +28,7 @@ fn ioerror() {
 }
 
 #[derive(Parser)]
+#[allow(non_snake_case, clippy::struct_excessive_bools)]
 struct Args {
     #[arg(short='B',action=ArgAction::SetTrue,default_value_t=false)]
     B: bool,
@@ -82,7 +83,7 @@ impl Args {
             out += "B";
         }
         if self.C {
-            out += "C"
+            out += "C";
         }
         if self.W {
             out += "W";
@@ -105,7 +106,7 @@ fn main() {
             let sys = args.comb();
             let trace = args.trace;
             loop {
-                interpret(&mut d, trace, &sys)
+                interpret(&mut d, trace, &sys);
             }
         }
         Some(Modes::LineFilter) => {
@@ -115,9 +116,9 @@ fn main() {
             loop {
                 let mut inp = String::new();
                 if s.read_line(&mut inp).is_err() {
-                    ioerror()
+                    ioerror();
                 }
-                let line = Expr::parse(inp, &HashMap::new(), args.trace);
+                let line = Expr::parse(&inp, &HashMap::new(), args.trace);
                 println!(
                     "{}",
                     if let Some(e) = line {
@@ -134,9 +135,9 @@ fn main() {
             let mut s1 = stdin();
             let mut inp = String::new();
             if s1.read_to_string(&mut inp).is_err() {
-                ioerror()
+                ioerror();
             }
-            let line = Expr::parse(inp, &HashMap::new(), args.trace);
+            let line = Expr::parse(&inp, &HashMap::new(), args.trace);
             println!(
                 "{}",
                 if let Some(e) = line {
@@ -151,7 +152,7 @@ fn main() {
 
 fn interpret(defs: &mut Defs, trace: bool, sys: &str) {
     let mut sk_expr = String::new();
-    println!("Input {} combinatorial expression:", sys);
+    println!("Input {sys} combinatorial expression:");
     if stdin().read_line(&mut sk_expr).is_err() {
         exit(0)
     }
@@ -168,14 +169,14 @@ fn interpret(defs: &mut Defs, trace: bool, sys: &str) {
         {
         } else if let Some((k, v)) = assignment(line, defs, trace) {
             defs.insert(k, v);
-        } else if let Some(e) = Expr::parse(line.to_string(), defs, trace) {
+        } else if let Some(e) = Expr::parse(line, defs, trace) {
             println!(
                 "Parsed `{}` of size {} into `{}` of size {}",
                 line,
                 line.len(),
                 e,
                 e.to_string().len()
-            )
+            );
         }
     }
 }
@@ -192,42 +193,47 @@ fn filefromobuf(p: &Option<PathBuf>) -> Option<File> {
 }
 
 fn validate(o: Option<Expr>) -> Expr {
-    if let Some(e) = o {
-        e
-    } else {
-        eprintln!("No valid expression was supplied.");
-        exit(1);
-    }
+    o.map_or_else(
+        || {
+            eprintln!("No valid expression was supplied.");
+            exit(1);
+        },
+        |e| e,
+    )
 }
 
-fn find_expression(e: &Option<String>, p: &Option<PathBuf>, d: &mut Defs, t: bool) -> Expr {
-    let f = filefromobuf(p);
-    match (e, f) {
+fn find_expression(
+    expr: &Option<String>,
+    possible: &Option<PathBuf>,
+    defs: &mut Defs,
+    trace: bool,
+) -> Expr {
+    let f = filefromobuf(possible);
+    match (expr, f) {
         (None, None) => {
             eprintln!(
                 "The filter modes must be supplied a filter to apply via the -e or -f options."
             );
             exit(1);
         }
-        (Some(s), None) => validate(Expr::parse(s.clone(), d, t)),
+        (Some(s), None) => validate(Expr::parse(s, defs, trace)),
         (None, Some(mut f)) => {
             let mut s = String::new();
             if f.read_to_string(&mut s).is_err() {
-                ioerror()
+                ioerror();
             };
-            validate(Expr::parse(s, d, t))
+            validate(Expr::parse(&s, defs, trace))
         }
         (Some(s), Some(mut f)) => {
-            let arg = Expr::parse(s.to_owned(), d, t);
+            let arg = Expr::parse(s, defs, trace);
             let mut body = String::new();
             if f.read_to_string(&mut body).is_err() {
-                ioerror()
+                ioerror();
             };
-            let file = Expr::parse_file(&body, d, t);
+            let file = Expr::parse_file(&body, defs, trace);
             match (arg, file) {
                 (None, None) => validate(None),
-                (Some(e), None) => e,
-                (None, Some(e)) => e,
+                (Some(e), None) | (None, Some(e)) => e,
                 (Some(e), Some(_)) => {
                     eprintln!("expr and file options are both valid, using expr option");
                     e
