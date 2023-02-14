@@ -52,7 +52,11 @@ impl Display for Expr {
 
 #[cfg(test)]
 mod parse_tests {
+    use std::collections::HashMap;
+
     use super::Expr;
+
+    static SK_DEFS: HashMap<char, Expr> = HashMap::from([('S', Expr::S0), ('K', Expr::K0)]);
 
     #[test]
     fn S_Combinator() {
@@ -87,32 +91,77 @@ mod parse_tests {
     }
 }
 
-impl<'a> Expr {
-    fn call(&'a self, other: Rc<Expr>, trace: bool) -> Rc<Expr> {
-        if trace {
-            println!("`{}` called on `{}`", self, other)
+pub fn assignment(line: &str, d: &Defs, t: bool) -> Option<(char, Expr)> {
+    let mut it = line.char_indices();
+    let mut name = None;
+    for (_, c) in it.by_ref() {
+        if c != ' ' {
+            name = Some(c);
+            break;
+        } else {
+            continue;
         }
-        match self {
+    }
+    for (_, e) in it.by_ref() {
+        if e == '=' {
+            break;
+        } else if e != ' ' {
+            return None;
+        }
+    }
+    Some((
+        name?,
+        Expr::parse(it.fold(String::new(), |a, b| a + &b.1.to_string()), d, t)?,
+    ))
+}
+
+impl<'a> Expr {
+    pub fn parse_file(body: &str, d: &mut Defs, t: bool) -> Option<Expr> {
+        for line in body.lines() {
+            let haystack = line.trim();
+            if ["#", "//", "--"]
+                .iter()
+                .any(|s| s[..] == haystack[0..s.len()])
+            {
+                continue;
+            } else if let Some((k, v)) = assignment(haystack, d, t) {
+                d.insert(k, v);
+            } else if let Some(e) = Expr::parse(haystack.to_string(), d, t) {
+                return Some(e);
+            }
+        }
+        None
+    }
+
+    pub fn apply(&'a self, other: Rc<Expr>, trace: bool) -> Rc<Expr> {
+        let result = match self {
             Expr::LongVar(name) => Rc::new(Expr::LongVar(name.to_string() + &other.arg())),
             Expr::Variable(name) => Rc::new(Expr::LongVar(name.to_string() + &other.arg())),
             Expr::S0 => Rc::new(Expr::S1(other.clone())),
             Expr::S1(x) => Rc::new(Expr::S2(x.clone(), other.clone())),
             Expr::S2(x, y) => x
-                .call(other.clone(), trace)
-                .call(y.call(other, trace), trace),
+                .apply(other.clone(), trace)
+                .apply(y.apply(other.clone(), trace), trace),
             Expr::K0 => Rc::new(Expr::K1(other.clone())),
             Expr::K1(x) => x.clone(),
             Expr::W0 => Rc::new(Expr::W1(other.clone())),
-            Expr::W1(x) => x.call(other.clone(), trace).call(other.clone(), trace),
-            Expr::C0 => Rc::new(Expr::C1(other)),
-            Expr::C1(x) => Rc::new(Expr::C2(x.clone(), other)),
-            Expr::C2(x, y) => x.call(other, trace).call(y.clone(), trace),
-            Expr::B0 => Rc::new(Expr::B1(other)),
-            Expr::B1(x) => Rc::new(Expr::B2(x.clone(), other)),
-            Expr::B2(x, y) => x.call(y.call(other, trace), trace),
+            Expr::W1(x) => x.apply(other.clone(), trace).apply(other.clone(), trace),
+            Expr::C0 => Rc::new(Expr::C1(other.clone())),
+            Expr::C1(x) => Rc::new(Expr::C2(x.clone(), other.clone())),
+            Expr::C2(x, y) => x.apply(other.clone(), trace).apply(y.clone(), trace),
+            Expr::B0 => Rc::new(Expr::B1(other.clone())),
+            Expr::B1(x) => Rc::new(Expr::B2(x.clone(), other.clone())),
+            Expr::B2(x, y) => x.apply(y.apply(other.clone(), trace), trace),
+        };
+        if trace {
+            println!(
+                "`{}` applied to `{}`, resulting in `{}`",
+                self, other, result
+            );
         }
+        result
     }
-    fn arg(&self) -> String {
+    pub fn arg(&self) -> String {
         match self {
             Expr::Variable(name) => name.to_string(),
             Expr::LongVar(name) => format!("({})", name),
@@ -131,7 +180,7 @@ impl<'a> Expr {
             Expr::B2(x, y) => format!("(B{}{})", x.arg(), y.arg()),
         }
     }
-    pub fn parse(s: &String, d: &Defs, trace: bool) -> Option<Expr> {
+    pub fn parse(s: String, d: &Defs, trace: bool) -> Option<Expr> {
         let mut tokens: VecDeque<Expr> = VecDeque::new();
         let mut to_ignore = 0;
         for (i, c) in s.chars().enumerate() {
@@ -161,24 +210,20 @@ impl<'a> Expr {
                     }
                 }
                 to_ignore = running.len() + 1;
-                tokens.push_back(Expr::parse(&running, d, trace)?);
+                tokens.push_back(Expr::parse(running, d, trace)?);
             } else if d.contains_key(&c) {
                 tokens.push_back(d.get(&c)?.clone());
             } else {
                 tokens.push_back(Expr::Variable(c));
             }
         }
-        if tokens.len() == 0 {
+        if tokens.is_empty() {
             return None;
         }
         let mut out = tokens.pop_front()?;
         while !tokens.is_empty() {
-            out = Expr::clone(&out.call(Rc::new(tokens.pop_front()?), trace));
+            out = Expr::clone(&out.apply(Rc::new(tokens.pop_front()?), trace));
         }
         Some(out)
-    }
-
-    pub fn SK_DEFS() -> Defs {
-        HashMap::from([('S', Expr::S0), ('K', Expr::K0)])
     }
 }
