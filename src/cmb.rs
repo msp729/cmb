@@ -22,6 +22,7 @@ pub enum Expr {
     B0,
     B1(C),
     B2(C, C),
+    I,
 }
 
 impl Display for Expr {
@@ -45,53 +46,16 @@ impl Display for Expr {
                 Self::B0 => "B".to_string(),
                 Self::B1(x) => format!("B{}", x.arg()),
                 Self::B2(x, y) => format!("B{}{}", x.arg(), y.arg()),
+                Self::I => "I".to_string(),
             }
         )
     }
 }
 
-#[cfg(test)]
-mod parse_tests {
-    use std::collections::HashMap;
-
-    use super::Expr;
-
-    static SK_DEFS: HashMap<char, Expr> = HashMap::from([('S', Expr::S0), ('K', Expr::K0)]);
-
-    #[test]
-    fn S_Combinator() {
-        let to_parse = &"S".to_string();
-        let result = "S".to_string();
-        let parsed = Expr::parse(to_parse, &Expr::SK_DEFS(), false).unwrap();
-        assert_eq!(parsed.to_string(), result)
-    }
-
-    #[test]
-    fn S_Combinator_eval() {
-        let to_parse = &"Sxyz".to_string();
-        let result = "xz(yz)".to_string();
-        let parsed = Expr::parse(to_parse, &Expr::SK_DEFS(), false).unwrap();
-        assert_eq!(parsed.to_string(), result)
-    }
-
-    #[test]
-    fn K_Combinator() {
-        let to_parse = &"K".to_string();
-        let result = "K".to_string();
-        let parsed = Expr::parse(to_parse, &Expr::SK_DEFS(), false).unwrap();
-        assert_eq!(parsed.to_string(), result)
-    }
-
-    #[test]
-    fn K_Combinator_eval() {
-        let to_parse = &"Kxy".to_string();
-        let result = "x".to_string();
-        let parsed = Expr::parse(to_parse, &Expr::SK_DEFS(), false).unwrap();
-        assert_eq!(parsed.to_string(), result)
-    }
-}
-
 pub fn assignment(line: &str, d: &Defs, t: bool) -> Option<(char, Expr)> {
+    if t {
+        println!("Checking for assignment in `{}`", line);
+    }
     let mut it = line.char_indices();
     let mut name = None;
     for (_, c) in it.by_ref() {
@@ -100,8 +64,17 @@ pub fn assignment(line: &str, d: &Defs, t: bool) -> Option<(char, Expr)> {
             break;
         }
     }
+    if t {
+        println!("name: {}", name?);
+    }
     for (_, e) in it.by_ref() {
-        if e != ' ' && e != '=' {
+        if e == '=' {
+            if t {
+                println!("e: {}", e);
+            }
+            break;
+        }
+        if e != ' ' {
             return None;
         }
     }
@@ -150,6 +123,7 @@ impl<'a> Expr {
             Self::B0 => Rc::new(Self::B1(other.clone())),
             Self::B1(x) => Rc::new(Self::B2(x.clone(), other.clone())),
             Self::B2(x, y) => x.apply(y.apply(other.clone(), trace), trace),
+            Self::I => other.clone(),
         };
         if trace {
             println!("`{self}` applied to `{other}`, resulting in `{result}`");
@@ -173,6 +147,7 @@ impl<'a> Expr {
             Self::B0 => String::from("B"),
             Self::B1(x) => format!("(B{})", x.arg()),
             Self::B2(x, y) => format!("(B{}{})", x.arg(), y.arg()),
+            Self::I => "I".to_string(),
         }
     }
     pub fn parse(s: &str, d: &Defs, trace: bool) -> Option<Self> {

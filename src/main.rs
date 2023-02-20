@@ -40,6 +40,8 @@ struct Args {
     W: bool,
     #[arg(short='C',action=ArgAction::SetTrue,default_value_t=false)]
     C: bool,
+    #[arg(short='I',action=ArgAction::SetTrue,default_value_t=false)]
+    I: bool,
     #[arg(short, long)]
     trace: bool,
     #[arg(short, long)]
@@ -60,39 +62,45 @@ enum Modes {
 impl Args {
     fn to_defs(&self) -> Defs {
         let mut out = HashMap::new();
-        if self.B {
-            out.insert('B', Expr::B0);
-        }
         if self.C {
             out.insert('C', Expr::C0);
         }
         if self.W {
             out.insert('W', Expr::W0);
         }
-        if !self.K {
-            out.insert('K', Expr::K0);
+        if self.B {
+            out.insert('B', Expr::B0);
         }
         if !self.S {
             out.insert('S', Expr::S0);
+        }
+        if !self.K {
+            out.insert('K', Expr::K0);
+        }
+        if self.I {
+            out.insert('I', Expr::I);
         }
         out
     }
     fn comb(&self) -> String {
         let mut out = String::new();
-        if self.B {
-            out += "B";
-        }
         if self.C {
             out += "C";
         }
         if self.W {
             out += "W";
         }
-        if !self.K {
-            out += "K";
+        if self.B {
+            out += "B";
         }
         if !self.S {
             out += "S";
+        }
+        if !self.K {
+            out += "K";
+        }
+        if self.I {
+            out += "I";
         }
         out
     }
