@@ -5,8 +5,7 @@
     clippy::perf,
     clippy::style,
     clippy::pedantic,
-    clippy::nursery,
-    clippy::cargo
+    clippy::nursery
 )]
 
 mod cmb;
@@ -20,6 +19,8 @@ use std::{
 };
 
 use clap::{ArgAction, Parser, Subcommand};
+
+use rustyline::DefaultEditor;
 
 use crate::cmb::{assignment, Defs, Expr};
 fn ioerror() {
@@ -113,8 +114,9 @@ fn main() {
             let mut d = args.to_defs();
             let sys = args.comb();
             let trace = args.trace;
+            let mut rl = DefaultEditor::new().expect("Could not open input");
             loop {
-                interpret(&mut d, trace, &sys);
+                interpret(&mut d, trace, &sys, &mut rl);
             }
         }
         Some(Modes::LineFilter) => {
@@ -158,30 +160,19 @@ fn main() {
     }
 }
 
-fn interpret(defs: &mut Defs, trace: bool, sys: &str) {
-    let mut sk_expr = String::new();
-    println!("Input {sys} combinatorial expression:");
-    if stdin().read_line(&mut sk_expr).is_err() {
-        exit(0)
-    }
-    if sk_expr.is_empty() {
-        exit(0)
-    }
-    let line = sk_expr.trim();
-    if !line.is_empty() {
-        if line
-            .chars()
-            .next()
-            .expect("str::is_empty is used to guarantee the presence of at least one character")
-            == '#'
-        {
-        } else if let Some((k, v)) = assignment(line, defs, trace) {
+fn interpret(defs: &mut Defs, trace: bool, sys: &str, rl: &mut DefaultEditor) {
+    let line = rl
+        .readline(&format!(":{sys}>"))
+        .map_or_else(|_| exit(0), |v| v);
+    let expr = line.trim();
+    if !expr.is_empty() && expr.chars().next().expect("!str::is_empty") != '#' {
+        if let Some((k, v)) = assignment(expr, defs, trace) {
             defs.insert(k, v);
-        } else if let Some(e) = Expr::parse(line, defs, trace) {
+        } else if let Some(e) = Expr::parse(expr, defs, trace) {
             println!(
                 "Parsed `{}` of size {} into `{}` of size {}",
-                line,
-                line.len(),
+                expr,
+                expr.len(),
                 e,
                 e.to_string().len()
             );

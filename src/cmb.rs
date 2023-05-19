@@ -54,7 +54,7 @@ impl Display for Expr {
 
 pub fn assignment(line: &str, d: &Defs, t: bool) -> Option<(char, Expr)> {
     if t {
-        println!("Checking for assignment in `{}`", line);
+        println!("Checking for assignment in `{line}`");
     }
     let mut it = line.char_indices();
     let mut name = None;
@@ -70,7 +70,7 @@ pub fn assignment(line: &str, d: &Defs, t: bool) -> Option<(char, Expr)> {
     for (_, e) in it.by_ref() {
         if e == '=' {
             if t {
-                println!("e: {}", e);
+                println!("e: {e}");
             }
             break;
         }

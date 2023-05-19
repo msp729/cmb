@@ -13,3 +13,4 @@ categories = ["command-line-utilities"]
 
 [dependencies]
 clap = { version = "4.1.4", features = ["derive"] }
+rustyline = "11.0.0"
