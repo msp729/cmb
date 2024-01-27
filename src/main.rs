@@ -112,11 +112,15 @@ fn main() {
     match args.mode {
         None | Some(Modes::Interpeter) => {
             let mut d = args.to_defs();
-            let sys = args.comb();
+            let mut sys = args.comb();
             let trace = args.trace;
             let mut rl = DefaultEditor::new().expect("Could not open input");
             loop {
-                interpret(&mut d, trace, &sys, &mut rl);
+                if let Some(c) = interpret(&mut d, trace, &sys, &mut rl) {
+                    if sys.find(c) == None {
+                        sys.push(c);
+                    }
+                }
             }
         }
         Some(Modes::LineFilter) => {
@@ -160,7 +164,7 @@ fn main() {
     }
 }
 
-fn interpret(defs: &mut Defs, trace: bool, sys: &str, rl: &mut DefaultEditor) {
+fn interpret(defs: &mut Defs, trace: bool, sys: &str, rl: &mut DefaultEditor) -> Option<char> {
     let line = rl
         .readline(&format!(":{sys}>"))
         .map_or_else(|_| exit(0), |v| v);
@@ -168,6 +172,7 @@ fn interpret(defs: &mut Defs, trace: bool, sys: &str, rl: &mut DefaultEditor) {
     if !expr.is_empty() && expr.chars().next().expect("!str::is_empty") != '#' {
         if let Some((k, v)) = assignment(expr, defs, trace) {
             defs.insert(k, v);
+            return Some(k);
         } else if let Some(e) = Expr::parse(expr, defs, trace) {
             println!(
                 "Parsed `{}` of size {} into `{}` of size {}",
@@ -178,6 +183,7 @@ fn interpret(defs: &mut Defs, trace: bool, sys: &str, rl: &mut DefaultEditor) {
             );
         }
     }
+    None
 }
 
 fn filefromobuf(p: &Option<PathBuf>) -> Option<File> {

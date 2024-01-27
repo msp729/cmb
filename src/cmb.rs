@@ -130,6 +130,7 @@ impl<'a> Expr {
         }
         result
     }
+
     pub fn arg(&self) -> String {
         match self {
             Self::Variable(name) => name.to_string(),
@@ -150,6 +151,7 @@ impl<'a> Expr {
             Self::I => "I".to_string(),
         }
     }
+
     pub fn parse(s: &str, d: &Defs, trace: bool) -> Option<Self> {
         let mut tokens: VecDeque<Self> = VecDeque::new();
         let mut to_ignore = 0;
