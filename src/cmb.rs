@@ -2,28 +2,45 @@ use std::collections::{HashMap, VecDeque};
 use std::fmt::{Display, Error, Formatter};
 use std::rc::Rc;
 
+// all definition names must be single characters.
 pub type Defs = HashMap<char, Expr>;
-type C = Rc<Expr>; // it's short for curry
+type C = Rc<Expr>; // C is short for "argument in a partial appliCation"
+                   // it's really curry
 
 #[derive(Clone, Debug)]
 pub enum Expr {
     Variable(char),
-    LongVar(String),
-    S0,
+    LongVar(String), // represents applications w/ variable functions
+    S0,              // Sabc = ac(bc)
     S1(C),
     S2(C, C),
-    K0,
+    K0, // Kab = a
     K1(C),
-    W0,
+    W0, // Wab = abb
     W1(C),
-    C0,
+    C0, // Cabc = acb
     C1(C),
     C2(C, C),
-    B0,
+    B0, // Babc = a(bc)
     B1(C),
     B2(C, C),
-    I,
+    I, // Ix = x
+    X, // Xx = xSK
 }
+
+// SK is a sufficient basis, as is CWBK, and X.
+// You need a way to:
+// - move things around (S, C)
+// - ignore things (K)
+// - duplicate things (S, W)
+// - create parentheses (S, B)
+
+// I = SK* = BCC = XX
+// K = X(XI)
+// W = SS(KI)
+// B = S(KS)K
+// C = S(BBS)(KK)
+// S = B(BW)(BBC) = XK
 
 impl Display for Expr {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
@@ -33,20 +50,21 @@ impl Display for Expr {
             match self {
                 Self::Variable(c) => c.to_string(),
                 Self::LongVar(name) => name.clone(),
-                Self::S0 => "S".to_string(),
-                Self::S1(x) => format!("S{}", x.arg()),
-                Self::S2(x, y) => format!("S{}{}", x.arg(), y.arg()),
+                Self::S0 => "S".to_string(), // primitives
                 Self::K0 => "K".to_string(),
-                Self::K1(x) => format!("K{}", x.arg()),
                 Self::W0 => "W".to_string(),
-                Self::W1(x) => format!("W{}", x.arg()),
                 Self::C0 => "C".to_string(),
+                Self::B0 => "B".to_string(),
+                Self::I => "I".to_string(),
+                Self::S1(x) => format!("S{}", x.arg()), // applications
+                Self::S2(x, y) => format!("S{}{}", x.arg(), y.arg()),
+                Self::K1(x) => format!("K{}", x.arg()),
+                Self::W1(x) => format!("W{}", x.arg()),
                 Self::C1(x) => format!("C{}", x.arg()),
                 Self::C2(x, y) => format!("C{}{}", x.arg(), y.arg()),
-                Self::B0 => "B".to_string(),
                 Self::B1(x) => format!("B{}", x.arg()),
                 Self::B2(x, y) => format!("B{}{}", x.arg(), y.arg()),
-                Self::I => "I".to_string(),
+                Self::X => "X".to_string(),
             }
         )
     }
@@ -105,6 +123,9 @@ impl<'a> Expr {
 
     #[allow(clippy::needless_pass_by_value)]
     pub fn apply(&'a self, other: Rc<Self>, trace: bool) -> Rc<Self> {
+        if trace {
+            println!("`{self}` applied to `{other}`");
+        }
         let result = match self {
             Self::LongVar(name) => Rc::new(Self::LongVar(name.to_string() + &other.arg())),
             Self::Variable(name) => Rc::new(Self::LongVar(name.to_string() + &other.arg())),
@@ -124,10 +145,10 @@ impl<'a> Expr {
             Self::B1(x) => Rc::new(Self::B2(x.clone(), other.clone())),
             Self::B2(x, y) => x.apply(y.apply(other.clone(), trace), trace),
             Self::I => other.clone(),
+            Self::X => other
+                .apply(Self::S0.into(), trace)
+                .apply(Self::K0.into(), trace),
         };
-        if trace {
-            println!("`{self}` applied to `{other}`, resulting in `{result}`");
-        }
         result
     }
 
@@ -136,19 +157,20 @@ impl<'a> Expr {
             Self::Variable(name) => name.to_string(),
             Self::LongVar(name) => format!("({name})"),
             Self::S0 => String::from("S"),
+            Self::K0 => String::from("K"),
+            Self::W0 => String::from("W"),
+            Self::C0 => String::from("C"),
+            Self::B0 => String::from("B"),
             Self::S1(x) => format!("(S{})", x.arg()),
             Self::S2(x, y) => format!("(S{}{})", x.arg(), y.arg()),
-            Self::K0 => String::from("K"),
             Self::K1(x) => format!("(K{})", x.arg()),
-            Self::W0 => String::from("W"),
             Self::W1(x) => format!("(W{})", x.arg()),
-            Self::C0 => String::from("C"),
             Self::C1(x) => format!("(C{})", x.arg()),
             Self::C2(x, y) => format!("(C{}{})", x.arg(), y.arg()),
-            Self::B0 => String::from("B"),
             Self::B1(x) => format!("(B{})", x.arg()),
             Self::B2(x, y) => format!("(B{}{})", x.arg(), y.arg()),
             Self::I => "I".to_string(),
+            Self::X => "X".to_string(),
         }
     }
 

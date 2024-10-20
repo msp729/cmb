@@ -43,6 +43,8 @@ struct Args {
     C: bool,
     #[arg(short='I',action=ArgAction::SetTrue,default_value_t=false)]
     I: bool,
+    #[arg(short='X',action=ArgAction::SetTrue,default_value_t=false)]
+    X: bool,
     #[arg(short, long)]
     trace: bool,
     #[arg(short, long)]
@@ -81,8 +83,12 @@ impl Args {
         if self.I {
             out.insert('I', Expr::I);
         }
+        if self.X {
+            out.insert('X', Expr::X);
+        }
         out
     }
+
     fn comb(&self) -> String {
         let mut out = String::new();
         if self.C {
@@ -102,6 +108,9 @@ impl Args {
         }
         if self.I {
             out += "I";
+        }
+        if self.X {
+            out += "X"
         }
         out
     }

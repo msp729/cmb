@@ -17,6 +17,8 @@ add built-in `B`, `W`, `C`, and `I` combinators.
 
 `-S` and `-K` remove the `S` and `K` combinators.
 
+Note that SK and CWBK are sufficient bases.
+
 ### Combinator definitions
 ```
 Sxyz=xz(yz)
@@ -26,3 +28,6 @@ Bxyz=x(yz)
 Cxyz=xzy
 Wxy=xyy
 ```
+
+
+C(CIS)K
